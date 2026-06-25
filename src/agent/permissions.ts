@@ -54,6 +54,15 @@ function describeAction(name: string, input: any): string {
     case "ssh_run": return `SSH ${input.user}@${input.host}: ${input.command}`;
     case "ssh_upload": return `Upload ${input.localPath} → ${input.user}@${input.host}:${input.remotePath}`;
     case "ssh_download": return `Download ${input.user}@${input.host}:${input.remotePath} → ${input.localPath}`;
+    case "str_replace_file": return `Edit ${input.path} (replace text)`;
+    case "append_file": return `Append to ${input.path}`;
+    case "list_processes": return `List processes${input.filter ? ` matching "${input.filter}"` : ""}`;
+    case "kill_process": return `Kill process: ${input.target}`;
+    case "docker_ps": return "List Docker containers";
+    case "docker_logs": return `Docker logs: ${input.container}`;
+    case "docker_exec": return `Docker exec in ${input.container}: ${input.command}`;
+    case "check_port": return `Check port ${input.port}`;
+    case "curl_request": return `HTTP ${input.method || "GET"} ${input.url}`;
     default: return `${name}(${JSON.stringify(input)})`;
   }
 }

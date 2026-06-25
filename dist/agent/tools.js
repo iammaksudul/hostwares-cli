@@ -80,6 +80,38 @@ async function executeLocalTool(tool) {
         case "ssh_run": return sshRun(input.host, input.user, input.password, input.keyPath, input.command);
         case "ssh_upload": return scp(input.host, input.user, input.password, input.localPath, input.remotePath, "up");
         case "ssh_download": return scp(input.host, input.user, input.password, input.remotePath, input.localPath, "down");
+        // Smart editing
+        case "str_replace_file": {
+            const content = fs.readFileSync(resolve(input.path), "utf8");
+            if (!content.includes(input.oldStr))
+                return `Error: oldStr not found in ${input.path}`;
+            const count = content.split(input.oldStr).length - 1;
+            if (count > 1)
+                return `Error: oldStr found ${count} times in ${input.path}. Make it more specific.`;
+            fs.writeFileSync(resolve(input.path), content.replace(input.oldStr, input.newStr));
+            return `Replaced in ${input.path}`;
+        }
+        case "append_file":
+            fs.appendFileSync(resolve(input.path), input.content);
+            return `Appended to ${input.path}`;
+        // Process
+        case "list_processes": return run(input.filter ? `ps aux | grep '${input.filter}' | grep -v grep` : "ps aux | head -20");
+        case "kill_process": return run(`pkill -f '${input.target}' 2>&1 || kill ${input.target} 2>&1`);
+        // Docker
+        case "docker_ps": return run(`docker ps ${input.all ? "-a" : ""} --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'`);
+        case "docker_logs": return run(`docker logs --tail ${input.lines || 50} ${input.container}`);
+        case "docker_exec": return run(`docker exec ${input.container} ${input.command}`);
+        // Network
+        case "check_port": return run(`lsof -i :${input.port} 2>/dev/null | grep LISTEN || echo "Port ${input.port} not in use"`);
+        case "curl_request": {
+            let cmd = `curl -s -w '\\nHTTP_STATUS:%{http_code}' ${input.method ? `-X ${input.method}` : ""}`;
+            if (input.headers)
+                cmd += ` -H '${input.headers}'`;
+            if (input.body)
+                cmd += ` -d '${input.body}'`;
+            cmd += ` '${input.url}' 2>&1 | tail -100`;
+            return run(cmd);
+        }
         default: return `Unknown tool: ${name}`;
     }
 }
