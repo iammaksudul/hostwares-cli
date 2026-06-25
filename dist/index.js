@@ -97,7 +97,7 @@ async function apiRaw(path, opts = {}) {
     });
     if (!res.ok) {
         const e = await res.json().catch(() => ({}));
-        throw new Error(e.error || e.message || `HTTP ${res.status}`);
+        throw new Error(e.message || e.error || `HTTP ${res.status}`);
     }
     return res.json();
 }
