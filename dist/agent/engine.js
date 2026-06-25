@@ -20,6 +20,7 @@ async function agentLoop(message, config, conversationId) {
     while (response.localToolCalls?.length > 0 && iterations < MAX_ITERATIONS) {
         iterations++;
         const results = [];
+        const assistantContent = response.assistantContent; // Save for sending back
         for (const tool of response.localToolCalls) {
             const allowed = await (0, permissions_1.askPermission)(tool);
             if (!allowed) {
@@ -41,7 +42,7 @@ async function agentLoop(message, config, conversationId) {
         }
         // Send results back to API
         console.log(`${DIM}thinking...${RESET}`);
-        response = await config.apiCall(null, { agentMode: true, conversationId: currentConvoId, toolResults: results });
+        response = await config.apiCall(null, { agentMode: true, conversationId: currentConvoId, toolResults: results, assistantContent });
         currentConvoId = response.conversationId || currentConvoId;
     }
     if (iterations >= MAX_ITERATIONS) {

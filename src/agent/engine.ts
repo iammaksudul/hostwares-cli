@@ -8,7 +8,7 @@ const RED = "\x1b[31m";
 const RESET = "\x1b[0m";
 
 export type AgentConfig = {
-  apiCall: (message: string | null, opts: { agentMode: boolean; conversationId?: string; toolResults?: any[] }) => Promise<any>;
+  apiCall: (message: string | null, opts: { agentMode: boolean; conversationId?: string; toolResults?: any[]; assistantContent?: any }) => Promise<any>;
 };
 
 export async function agentLoop(message: string, config: AgentConfig, conversationId?: string): Promise<{ text: string; conversationId: string }> {
@@ -23,6 +23,7 @@ export async function agentLoop(message: string, config: AgentConfig, conversati
   while (response.localToolCalls?.length > 0 && iterations < MAX_ITERATIONS) {
     iterations++;
     const results: { id: string; result: string }[] = [];
+    const assistantContent = response.assistantContent; // Save for sending back
 
     for (const tool of response.localToolCalls as ToolCall[]) {
       const allowed = await askPermission(tool);
@@ -46,7 +47,7 @@ export async function agentLoop(message: string, config: AgentConfig, conversati
 
     // Send results back to API
     console.log(`${DIM}thinking...${RESET}`);
-    response = await config.apiCall(null, { agentMode: true, conversationId: currentConvoId, toolResults: results });
+    response = await config.apiCall(null, { agentMode: true, conversationId: currentConvoId, toolResults: results, assistantContent });
     currentConvoId = response.conversationId || currentConvoId;
   }
 
