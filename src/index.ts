@@ -31,7 +31,7 @@ async function chat(message: string): Promise<string> {
 }
 
 const program = new Command();
-program.name("hostwares").description("Hostwares CLI — Deploy and manage from your terminal").version("1.0.0");
+program.name("hw").description("Hostwares CLI — AI DevOps from your terminal").version("1.0.0");
 
 // Login
 program.command("login").description("Authenticate with Hostwares").option("-t, --token <key>", "API key (skip browser flow)").action(async (opts) => {

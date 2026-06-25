@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Hostwares CLI - Deploy and manage from your terminal",
   "main": "dist/index.js",
-  "bin": { "hostwares": "dist/index.js" },
+  "bin": { "hw": "dist/index.js", "hostwares": "dist/index.js" },
   "scripts": { "build": "tsc", "start": "node dist/index.js" },
   "keywords": ["hostwares", "deploy", "cli", "devops", "hosting"],
   "author": "Hostwares LLC",
