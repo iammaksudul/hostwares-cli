@@ -4,6 +4,37 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
+const PURPLE = "\x1b[35m";
+const GREEN = "\x1b[32m";
+const CYAN = "\x1b[36m";
+const DIM = "\x1b[2m";
+const BOLD = "\x1b[1m";
+const RESET = "\x1b[0m";
+
+const BANNER = `
+${PURPLE}██╗  ██╗██╗    ██╗${RESET}
+${PURPLE}██║  ██║██║    ██║${RESET}    ${BOLD}Hostwares CLI${RESET} ${DIM}v1.0.0${RESET}
+${PURPLE}███████║██║ █╗ ██║${RESET}    ${DIM}AI-Powered Cloud Hosting${RESET}
+${PURPLE}██╔══██║██║███╗██║${RESET}
+${PURPLE}██║  ██║╚███╔███╔╝${RESET}    ${GREEN}●${RESET} ${DIM}hostwares.com${RESET}
+${PURPLE}╚═╝  ╚═╝ ╚══╝╚══╝${RESET}
+`;
+
+function showWelcome() {
+  const config = getConfig();
+  console.log(BANNER);
+  if (config.apiKey) {
+    console.log(`  ${GREEN}✓${RESET} Authenticated    ${DIM}(hw logout to switch)${RESET}`);
+  } else {
+    console.log(`  ${CYAN}→${RESET} Run ${BOLD}hw login${RESET} to get started`);
+  }
+  console.log(`\n${DIM}╭───────────────────────────────────────────────────────────────╮${RESET}`);
+  console.log(`${DIM}│${RESET}  ${BOLD}hw deploy${RESET}   Deploy current project     ${DIM}│${RESET} ${BOLD}hw ask${RESET} "..."  AI help`);
+  console.log(`${DIM}│${RESET}  ${BOLD}hw list${RESET}     Show all sites             ${DIM}│${RESET} ${BOLD}hw chat${RESET}      Interactive`);
+  console.log(`${DIM}│${RESET}  ${BOLD}hw logs${RESET}     View deploy logs           ${DIM}│${RESET} ${BOLD}hw status${RESET}    Check health`);
+  console.log(`${DIM}╰───────────────────────────────────────────────────────────────╯${RESET}\n`);
+}
+
 const CONFIG_DIR = join(homedir(), ".hostwares");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 
@@ -128,14 +159,21 @@ db.command("create <name>").option("-t, --type <type>", "Type", "postgresql").ac
 // AI chat
 program.command("ask <message...>").description("Ask AI anything").action(async (words) => { console.log(await chat(words.join(" "))); });
 program.command("chat").description("Interactive AI chat").action(async () => {
+  showWelcome();
   const readline = await import("readline");
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  console.log("Hostwares AI (type 'exit' to quit)\n");
-  const ask = () => rl.question("you> ", async (input) => { if (input === "exit") { rl.close(); return; } console.log("\n" + await chat(input) + "\n"); ask(); });
+  console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}(type 'exit' to quit)${RESET}\n`);
+  const ask = () => rl.question(`${BOLD}you>${RESET} `, async (input) => { if (input === "exit") { rl.close(); return; } console.log(`\n${DIM}thinking...${RESET}`); const resp = await chat(input); console.log(`\n${CYAN}hw>${RESET} ${resp}\n`); ask(); });
   ask();
 });
 
 // Credits
 program.command("credits").description("Check credit balance").action(async () => { console.log(await chat("What's my credit balance?")); });
+
+// Show banner when no command given
+if (process.argv.length <= 2) {
+  showWelcome();
+  process.exit(0);
+}
 
 program.parse();
