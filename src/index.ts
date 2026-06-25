@@ -259,10 +259,12 @@ if (process.argv.length <= 2) {
   showWelcome();
   const config = getConfig();
   if (!config.apiKey) {
+    console.log(`  Run ${BOLD}hw login${RESET} to get started.\n`);
     process.exit(0);
   }
-  // Drop into interactive chat like kiro-cli
   startChat();
+} else {
+  program.parse();
 }
 
 async function startChat() {
@@ -285,4 +287,3 @@ async function startChat() {
   prompt();
 }
 
-program.parse();
