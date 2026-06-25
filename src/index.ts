@@ -56,8 +56,13 @@ async function api(path: string, opts: RequestInit = {}): Promise<any> {
   return res.json();
 }
 
+let _conversationId: string | null = null;
+
 async function chat(message: string): Promise<string> {
-  const data = await api("/api/chat", { method: "POST", body: JSON.stringify({ message }) });
+  const body: any = { message };
+  if (_conversationId) body.conversationId = _conversationId;
+  const data = await api("/api/chat", { method: "POST", body: JSON.stringify(body) });
+  if (data.conversationId) _conversationId = data.conversationId;
   return data.text || data.message || JSON.stringify(data);
 }
 

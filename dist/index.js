@@ -60,8 +60,14 @@ async function api(path, opts = {}) {
     }
     return res.json();
 }
+let _conversationId = null;
 async function chat(message) {
-    const data = await api("/api/chat", { method: "POST", body: JSON.stringify({ message }) });
+    const body = { message };
+    if (_conversationId)
+        body.conversationId = _conversationId;
+    const data = await api("/api/chat", { method: "POST", body: JSON.stringify(body) });
+    if (data.conversationId)
+        _conversationId = data.conversationId;
     return data.text || data.message || JSON.stringify(data);
 }
 const program = new commander_1.Command();
