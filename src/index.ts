@@ -34,9 +34,41 @@ const program = new Command();
 program.name("hostwares").description("Hostwares CLI — Deploy and manage from your terminal").version("1.0.0");
 
 // Login
-program.command("login").description("Authenticate with Hostwares").option("-t, --token <key>", "API key").action((opts) => {
-  if (opts.token) { saveConfig({ apiKey: opts.token, baseUrl: "https://hostwares.com" }); console.log("✓ Logged in"); }
-  else { console.log("Get your API key at: https://hostwares.com/dashboard/api-keys\nThen run: hostwares login --token YOUR_KEY"); }
+program.command("login").description("Authenticate with Hostwares").option("-t, --token <key>", "API key (skip browser flow)").action(async (opts) => {
+  if (opts.token) { saveConfig({ apiKey: opts.token, baseUrl: "https://hostwares.com" }); console.log("✓ Logged in"); return; }
+
+  const baseUrl = "https://hostwares.com";
+  console.log("Authenticating with Hostwares...\n");
+
+  // Request device code
+  const res = await fetch(`${baseUrl}/api/auth/device`, { method: "POST" });
+  if (!res.ok) { console.error("Failed to start auth. Try: hostwares login --token YOUR_KEY"); return; }
+  const { device_code, user_code, verification_url } = await res.json();
+
+  console.log(`  Open this URL in your browser:\n`);
+  console.log(`  ${verification_url}\n`);
+  console.log(`  Confirmation code: ${user_code}\n`);
+
+  // Try to open browser
+  const { exec } = await import("child_process");
+  const openCmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+  exec(`${openCmd} "${verification_url}"`);
+
+  console.log("  Waiting for authorization...");
+
+  // Poll until approved
+  for (let i = 0; i < 120; i++) {
+    await new Promise(r => setTimeout(r, 3000));
+    const poll = await fetch(`${baseUrl}/api/auth/device-poll?code=${device_code}`);
+    const data = await poll.json();
+    if (data.status === "approved") {
+      saveConfig({ apiKey: data.token, baseUrl });
+      console.log("\n  ✓ Logged in successfully!\n");
+      return;
+    }
+    if (data.error === "expired") { console.error("\n  ✗ Code expired. Run 'hostwares login' again."); return; }
+  }
+  console.error("\n  ✗ Timed out. Run 'hostwares login' again.");
 });
 
 // Deploy
