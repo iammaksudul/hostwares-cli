@@ -59,11 +59,42 @@ async function api(path: string, opts: RequestInit = {}): Promise<any> {
 let _conversationId: string | null = null;
 
 async function chat(message: string): Promise<string> {
-  const body: any = { message };
+  const body: any = { message, agentMode: true };
   if (_conversationId) body.conversationId = _conversationId;
-  const data = await api("/api/chat", { method: "POST", body: JSON.stringify(body) });
+  const data = await apiRaw("/api/chat", { method: "POST", body: JSON.stringify(body) });
   if (data.conversationId) _conversationId = data.conversationId;
+
+  // Agent mode: handle local tool calls
+  if (data.localToolCalls?.length > 0) {
+    const { agentLoop } = await import("./agent/engine.js");
+    const result = await agentLoop(message, {
+      apiCall: async (msg: string | null, opts: any) => {
+        const b: any = { ...opts };
+        if (msg) b.message = msg;
+        if (_conversationId) b.conversationId = _conversationId;
+        const d = await apiRaw("/api/chat", { method: "POST", body: JSON.stringify(b) });
+        if (d.conversationId) _conversationId = d.conversationId;
+        return d;
+      },
+    }, _conversationId || undefined);
+    _conversationId = result.conversationId;
+    return result.text;
+  }
+
   return data.text || data.message || JSON.stringify(data);
+}
+
+async function apiRaw(path: string, opts: RequestInit = {}): Promise<any> {
+  const config = getConfig();
+  const res = await fetch(`${config.baseUrl || "https://hostwares.com"}${path}`, {
+    ...opts,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}`, ...opts.headers as any },
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error || e.message || `HTTP ${res.status}`);
+  }
+  return res.json();
 }
 
 const program = new Command();

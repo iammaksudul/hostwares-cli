@@ -62,13 +62,44 @@ async function api(path, opts = {}) {
 }
 let _conversationId = null;
 async function chat(message) {
-    const body = { message };
+    const body = { message, agentMode: true };
     if (_conversationId)
         body.conversationId = _conversationId;
-    const data = await api("/api/chat", { method: "POST", body: JSON.stringify(body) });
+    const data = await apiRaw("/api/chat", { method: "POST", body: JSON.stringify(body) });
     if (data.conversationId)
         _conversationId = data.conversationId;
+    // Agent mode: handle local tool calls
+    if (data.localToolCalls?.length > 0) {
+        const { agentLoop } = await import("./agent/engine.js");
+        const result = await agentLoop(message, {
+            apiCall: async (msg, opts) => {
+                const b = { ...opts };
+                if (msg)
+                    b.message = msg;
+                if (_conversationId)
+                    b.conversationId = _conversationId;
+                const d = await apiRaw("/api/chat", { method: "POST", body: JSON.stringify(b) });
+                if (d.conversationId)
+                    _conversationId = d.conversationId;
+                return d;
+            },
+        }, _conversationId || undefined);
+        _conversationId = result.conversationId;
+        return result.text;
+    }
     return data.text || data.message || JSON.stringify(data);
+}
+async function apiRaw(path, opts = {}) {
+    const config = getConfig();
+    const res = await fetch(`${config.baseUrl || "https://hostwares.com"}${path}`, {
+        ...opts,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}`, ...opts.headers },
+    });
+    if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || e.message || `HTTP ${res.status}`);
+    }
+    return res.json();
 }
 const program = new commander_1.Command();
 program.name("hw").description("Hostwares CLI — AI DevOps from your terminal").version("1.0.0");
