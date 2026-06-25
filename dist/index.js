@@ -192,6 +192,77 @@ program.command("logout").description("Sign out and remove credentials").action(
         console.log("Not logged in.");
     }
 });
+// Update
+program.command("update").description("Update hw to the latest version").action(async () => {
+    console.log(`${DIM}Updating Hostwares CLI...${RESET}`);
+    const { execSync } = require("child_process");
+    try {
+        execSync("curl -fsSL https://hostwares.com/install.sh | bash", { stdio: "inherit" });
+    }
+    catch {
+        console.log(`\n${"\x1b[31m"}Update failed.${RESET} Try manually: curl -fsSL https://hostwares.com/install.sh | bash`);
+    }
+});
+// Help / Instructions
+program.command("help").description("Show help and usage instructions").action(() => {
+    console.log(`
+${PURPLE}${BOLD}Hostwares CLI${RESET} — AI-Powered Cloud Hosting from your terminal.
+
+${BOLD}INSTALL${RESET}
+  curl -fsSL https://hostwares.com/install.sh | bash
+
+${BOLD}AUTHENTICATE${RESET}
+  hw login                  Opens browser for secure login
+  hw login --token KEY      Use API key directly (for CI/CD)
+  hw logout                 Sign out
+
+${BOLD}DEPLOY${RESET}
+  hw deploy                 Deploy current directory (auto-detects framework)
+  hw deploy --repo URL      Deploy from a GitHub repo
+  hw deploy --name NAME     Set a custom site name
+
+${BOLD}MANAGE SITES${RESET}
+  hw list                   List all your sites
+  hw status NAME            Check site status
+  hw logs NAME              View deployment logs
+  hw restart NAME           Restart a site
+  hw stop NAME              Stop a site
+  hw start NAME             Start a stopped site
+  hw env NAME               List environment variables
+  hw env NAME set KEY=VAL   Set an environment variable
+  hw domain NAME DOMAIN     Set a custom domain
+
+${BOLD}DATABASES${RESET}
+  hw db list                List all databases
+  hw db create NAME         Create PostgreSQL database
+  hw db create NAME -t TYPE Create specific type (mysql, redis, mongodb)
+
+${BOLD}AI ASSISTANT${RESET}
+  hw                        Start interactive AI session
+  hw chat                   Start interactive AI session
+  hw ask "MESSAGE"          Ask a one-off question
+
+${BOLD}BILLING${RESET}
+  hw credits                Check credit balance
+
+${BOLD}MAINTENANCE${RESET}
+  hw update                 Update to latest version
+  hw logout                 Sign out
+  hw help                   Show this help
+
+${BOLD}EXAMPLES${RESET}
+  hw deploy --repo github.com/user/my-app
+  hw ask "why is my-app returning 502?"
+  hw env my-app set DATABASE_URL=postgres://...
+  hw domain my-app mysite.com
+
+${BOLD}DOCS${RESET}
+  https://hostwares.com/docs/cli
+
+${BOLD}UNINSTALL${RESET}
+  curl -fsSL https://hostwares.com/uninstall.sh | bash
+`);
+});
 // Show banner + start interactive session when no command given
 if (process.argv.length <= 2) {
     showWelcome();
