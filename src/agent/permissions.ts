@@ -1,5 +1,3 @@
-import * as readline from "readline";
-
 let trustMode = false;
 
 const BOLD = "\x1b[1m";
@@ -27,8 +25,20 @@ export async function askPermission(tool: { name: string; input: any; destructiv
 }
 
 function prompt(msg: string): Promise<string> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise(resolve => rl.question(msg, (a) => { rl.close(); resolve(a.trim().toLowerCase()); }));
+  process.stdout.write(msg);
+  return new Promise(resolve => {
+    const stdin = process.stdin;
+    const wasRaw = stdin.isRaw;
+    if (stdin.isTTY) stdin.setRawMode(true);
+    stdin.resume();
+    stdin.once("data", (data) => {
+      const ch = data.toString().trim().toLowerCase();
+      if (stdin.isTTY) stdin.setRawMode(wasRaw || false);
+      stdin.pause();
+      process.stdout.write(ch + "\n");
+      resolve(ch);
+    });
+  });
 }
 
 function describeAction(name: string, input: any): string {
