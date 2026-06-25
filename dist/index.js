@@ -165,17 +165,19 @@ db.command("list").action(async () => { const dbs = await api("/api/databases");
     console.log(`  ${d.status === "RUNNING" ? "🟢" : "🔴"} ${d.name.padEnd(20)} ${d.type.padEnd(12)} ${d.status}`); });
 db.command("create <name>").option("-t, --type <type>", "Type", "postgresql").action(async (name, opts) => { console.log(await chat(`Create a ${opts.type} database named ${name}`)); });
 // AI chat
-program.command("ask <message...>").description("Ask AI anything").action(async (words) => { console.log(await chat(words.join(" "))); });
-program.command("chat").description("Interactive AI chat").action(async () => {
-    showWelcome();
-    const readline = await import("readline");
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}(type 'exit' to quit)${RESET}\n`);
-    const ask = () => rl.question(`${BOLD}you>${RESET} `, async (input) => { if (input === "exit") {
-        rl.close();
+program.command("ask [message...]").description("Ask AI anything (opens chat if no message)").action(async (words) => {
+    if (!words || words.length === 0) {
+        showWelcome();
+        await startChat();
         return;
-    } console.log(`\n${DIM}thinking...${RESET}`); const resp = await chat(input); console.log(`\n${CYAN}hw>${RESET} ${resp}\n`); ask(); });
-    ask();
+    }
+    console.log(`${DIM}thinking...${RESET}`);
+    const resp = await chat(words.join(" "));
+    console.log(`\n${CYAN}hw>${RESET} ${resp}\n`);
+});
+program.command("chat").description("Interactive AI chat session").action(async () => {
+    showWelcome();
+    await startChat();
 });
 // Credits
 program.command("credits").description("Check credit balance").action(async () => { console.log(await chat("What's my credit balance?")); });
@@ -190,9 +192,41 @@ program.command("logout").description("Sign out and remove credentials").action(
         console.log("Not logged in.");
     }
 });
-// Show banner when no command given
+// Show banner + start interactive session when no command given
 if (process.argv.length <= 2) {
     showWelcome();
-    process.exit(0);
+    const config = getConfig();
+    if (!config.apiKey) {
+        process.exit(0);
+    }
+    // Drop into interactive chat like kiro-cli
+    startChat();
+}
+async function startChat() {
+    const readline = await import("readline");
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}— your DevOps engineer. Type anything or 'exit' to quit.${RESET}\n`);
+    const prompt = () => rl.question(`${BOLD}you>${RESET} `, async (input) => {
+        const trimmed = input.trim();
+        if (!trimmed) {
+            prompt();
+            return;
+        }
+        if (trimmed === "exit" || trimmed === "quit" || trimmed === "/quit") {
+            console.log(`\n${DIM}Goodbye!${RESET}\n`);
+            rl.close();
+            return;
+        }
+        console.log(`${DIM}thinking...${RESET}`);
+        try {
+            const resp = await chat(trimmed);
+            console.log(`\n${CYAN}hw>${RESET} ${resp}\n`);
+        }
+        catch (e) {
+            console.log(`\n${"\x1b[31m"}Error:${RESET} ${e.message}\n`);
+        }
+        prompt();
+    });
+    prompt();
 }
 program.parse();
