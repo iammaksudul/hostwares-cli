@@ -179,6 +179,17 @@ program.command("chat").description("Interactive AI chat").action(async () => {
 });
 // Credits
 program.command("credits").description("Check credit balance").action(async () => { console.log(await chat("What's my credit balance?")); });
+// Logout
+program.command("logout").description("Sign out and remove credentials").action(() => {
+    const { existsSync, unlinkSync } = require("fs");
+    if (existsSync(CONFIG_FILE)) {
+        unlinkSync(CONFIG_FILE);
+        console.log(`${GREEN}✓${RESET} Logged out. Run ${BOLD}hw login${RESET} to sign in again.`);
+    }
+    else {
+        console.log("Not logged in.");
+    }
+});
 // Show banner when no command given
 if (process.argv.length <= 2) {
     showWelcome();
