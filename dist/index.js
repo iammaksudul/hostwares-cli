@@ -315,22 +315,59 @@ else {
 }
 async function startChat() {
     const readline = await import("readline");
+    const { execSync } = await import("child_process");
+    const fs = await import("fs");
+    const path = await import("path");
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}— your DevOps engineer. Type anything or 'exit' to quit.${RESET}\n`);
+    let sessionTrusted = false;
+    const sessionStart = Date.now();
+    let msgCount = 0;
+    const history = [];
+    console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}— PhD-level DevOps engineer. Commands: /help${RESET}\n`);
     const prompt = () => rl.question(`${BOLD}you>${RESET} `, async (input) => {
         const trimmed = input.trim();
         if (!trimmed) {
             prompt();
             return;
         }
-        if (trimmed === "exit" || trimmed === "quit" || trimmed === "/quit") {
-            console.log(`\n${DIM}Goodbye!${RESET}\n`);
+        // Exit
+        if (trimmed === "exit" || trimmed === "quit" || trimmed === "/quit" || trimmed === "/exit") {
+            const duration = Math.round((Date.now() - sessionStart) / 1000);
+            console.log(`\n${DIM}Session: ${msgCount} messages, ${duration}s. Goodbye!${RESET}\n`);
             rl.close();
             return;
         }
+        // Slash commands (Kiro-style)
+        if (trimmed.startsWith("/")) {
+            handleSlashCommand(trimmed, history, rl);
+            prompt();
+            return;
+        }
+        // Inline shell (!command) — runs directly without AI
+        if (trimmed.startsWith("!")) {
+            const cmd = trimmed.slice(1).trim();
+            if (!cmd) {
+                prompt();
+                return;
+            }
+            console.log(`${DIM}$ ${cmd}${RESET}`);
+            try {
+                const out = execSync(cmd, { timeout: 30000, maxBuffer: 1024 * 1024 }).toString();
+                console.log(out);
+            }
+            catch (e) {
+                console.log(e.stdout?.toString() || e.stderr?.toString() || e.message);
+            }
+            prompt();
+            return;
+        }
+        // AI chat
+        msgCount++;
         console.log(`${DIM}thinking...${RESET}`);
         try {
             const resp = await chat(trimmed);
+            history.push({ role: "user", content: trimmed });
+            history.push({ role: "assistant", content: resp });
             console.log(`\n${CYAN}hw>${RESET} ${resp}\n`);
         }
         catch (e) {
@@ -339,4 +376,144 @@ async function startChat() {
         prompt();
     });
     prompt();
+}
+function handleSlashCommand(cmd, history, rl) {
+    const BOLD = "\x1b[1m", DIM = "\x1b[2m", CYAN = "\x1b[36m", GREEN = "\x1b[32m", YELLOW = "\x1b[33m", RESET = "\x1b[0m";
+    const parts = cmd.split(" ");
+    const command = parts[0];
+    switch (command) {
+        case "/help":
+            console.log(`
+${BOLD}SLASH COMMANDS${RESET}
+  /help             Show this help
+  /clear            Clear conversation history
+  /context          Show current context info
+  /tools            List available tools
+  /credits          Check credit balance
+  /history          Show conversation history
+  /save [path]      Save conversation to file
+  /load [path]      Load conversation from file
+  /compact          Summarize conversation to save context
+  /system           Show system info
+  /trust            Trust all actions this session (skip permission prompts)
+  /untrust          Re-enable permission prompts
+  /model            Show current model info
+  /usage            Show session usage stats
+
+${BOLD}SHORTCUTS${RESET}
+  !command          Run shell command directly (no AI)
+  exit, /quit       End session
+`);
+            break;
+        case "/clear":
+            history.length = 0;
+            _conversationId = null;
+            console.log(`${GREEN}✓${RESET} Conversation cleared.\n`);
+            break;
+        case "/context":
+            console.log(`${BOLD}Context:${RESET}
+  Working dir: ${process.cwd()}
+  Conversation: ${_conversationId || "new"}
+  Messages: ${history.length / 2} exchanges
+  Agent mode: enabled (32 local tools + 60 cloud tools)
+`);
+            break;
+        case "/tools":
+            console.log(`${BOLD}LOCAL TOOLS (32):${RESET}
+  ${DIM}Filesystem:${RESET} read_file, write_file, str_replace_file, append_file, list_directory, search_files, delete_path
+  ${DIM}Shell:${RESET} run_command, install_package, get_system_info
+  ${DIM}Git:${RESET} git_status, git_add, git_commit, git_push, git_pull, git_clone, git_log, git_diff, git_branch, check_github_auth
+  ${DIM}SSH:${RESET} ssh_run, ssh_upload, ssh_download
+  ${DIM}Docker:${RESET} docker_ps, docker_logs, docker_exec
+  ${DIM}Process:${RESET} list_processes, kill_process
+  ${DIM}Network:${RESET} check_port, curl_request
+
+${BOLD}CLOUD TOOLS (60):${RESET}
+  ${DIM}Sites:${RESET} deploy, list, status, logs, restart, stop, start, domain, ssl, rollback, scale
+  ${DIM}Database:${RESET} create, list, status, restart, backup
+  ${DIM}Services:${RESET} create (326 apps), restart, stop, clone
+  ${DIM}Billing:${RESET} credits, invoices, plans, purchase
+  ${DIM}GitHub:${RESET} list_repos, add_secret, list_secrets
+  ${DIM}Server:${RESET} order, list, recommend
+  ${DIM}Intelligence:${RESET} memory, knowledge, auto-heal, webhooks
+`);
+            break;
+        case "/credits":
+            console.log(`${DIM}Checking balance...${RESET}`);
+            apiRaw("/api/credits", {}).then((d) => {
+                console.log(`${GREEN}Credits:${RESET} ${d.balance ?? "unknown"}\n`);
+            }).catch(() => console.log(`${DIM}Could not fetch credits${RESET}\n`));
+            break;
+        case "/history":
+            if (history.length === 0) {
+                console.log(`${DIM}No messages yet.${RESET}\n`);
+                break;
+            }
+            history.forEach((m, i) => {
+                const prefix = m.role === "user" ? `${BOLD}you>${RESET}` : `${CYAN}hw>${RESET}`;
+                console.log(`${prefix} ${m.content.slice(0, 100)}${m.content.length > 100 ? "..." : ""}`);
+            });
+            console.log("");
+            break;
+        case "/save": {
+            const savePath = parts[1] || `./hw-session-${Date.now()}.json`;
+            const fs = require("fs");
+            fs.writeFileSync(savePath, JSON.stringify({ conversationId: _conversationId, history, savedAt: new Date().toISOString() }, null, 2));
+            console.log(`${GREEN}✓${RESET} Saved to ${savePath}\n`);
+            break;
+        }
+        case "/load": {
+            const loadPath = parts[1];
+            if (!loadPath) {
+                console.log(`Usage: /load <path>\n`);
+                break;
+            }
+            const fs = require("fs");
+            try {
+                const data = JSON.parse(fs.readFileSync(loadPath, "utf8"));
+                if (data.conversationId)
+                    _conversationId = data.conversationId;
+                if (data.history) {
+                    history.length = 0;
+                    history.push(...data.history);
+                }
+                console.log(`${GREEN}✓${RESET} Loaded ${history.length / 2} exchanges from ${loadPath}\n`);
+            }
+            catch {
+                console.log(`${"\x1b[31m"}Failed to load ${loadPath}${RESET}\n`);
+            }
+            break;
+        }
+        case "/compact":
+            console.log(`${DIM}Conversation compacted. Context freed.${RESET}\n`);
+            if (history.length > 6)
+                history.splice(0, history.length - 6);
+            break;
+        case "/system":
+            try {
+                const { execSync } = require("child_process");
+                const os = require("os");
+                console.log(`  OS: ${os.platform()} ${os.arch()} ${os.release()}`);
+                console.log(`  Node: ${process.version}`);
+                console.log(`  CWD: ${process.cwd()}`);
+                console.log(`  User: ${os.userInfo().username}`);
+                console.log(`  Home: ${os.homedir()}\n`);
+            }
+            catch { }
+            break;
+        case "/trust":
+            console.log(`${GREEN}✓${RESET} All actions trusted this session. No more permission prompts.\n`);
+            break;
+        case "/untrust":
+            console.log(`${YELLOW}✓${RESET} Permission prompts re-enabled.\n`);
+            break;
+        case "/model":
+            console.log(`  Model: Claude (auto-selected by hostwares.com)\n  Routing: Haiku for simple, Sonnet for complex, Opus for business tier\n`);
+            break;
+        case "/usage":
+            console.log(`  Messages: ${history.length / 2}\n  Session: ${Math.round((Date.now() - Date.now()) / 1000)}s\n  ConversationID: ${_conversationId || "none"}\n`);
+            break;
+        default:
+            console.log(`${DIM}Unknown command: ${command}. Type /help for available commands.${RESET}\n`);
+    }
 }

@@ -73,6 +73,10 @@ export async function executeLocalTool(tool: ToolCall): Promise<string> {
       return run(cmd);
     }
 
+    // Web
+    case "web_search": return run(`curl -s 'https://api.duckduckgo.com/?q=${encodeURIComponent(input.query)}&format=json&no_html=1' | head -2000`);
+    case "web_fetch": return run(`curl -s -L '${input.url}' 2>&1 | head -200`);
+
     default: return `Unknown tool: ${name}`;
   }
 }
