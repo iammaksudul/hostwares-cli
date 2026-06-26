@@ -323,59 +323,115 @@ async function startChat() {
     const sessionStart = Date.now();
     let msgCount = 0;
     const history = [];
-    console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}— PhD-level DevOps engineer. Commands: /help${RESET}\n`);
-    const prompt = () => rl.question(`${BOLD}you>${RESET} `, async (input) => {
-        const trimmed = input.trim();
-        if (!trimmed) {
-            prompt();
-            return;
+    // Context tracking (approximate tokens)
+    let contextTokens = 0;
+    const MAX_CONTEXT = 180000; // Claude's context window
+    const estimateTokens = (text) => Math.ceil(text.length / 4);
+    const updateContext = () => {
+        contextTokens = history.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+    };
+    const getContextBar = () => {
+        const pct = Math.min(100, Math.round((contextTokens / MAX_CONTEXT) * 100));
+        const used = (contextTokens / 1000).toFixed(1);
+        return `${DIM}${used}K (${pct}%)${RESET}`;
+    };
+    console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}— PhD-level DevOps engineer. Type / for commands${RESET}\n`);
+    const prompt = () => {
+        // Auto-compact if context exceeds 70%
+        if (contextTokens > MAX_CONTEXT * 0.7 && history.length > 10) {
+            console.log(`${DIM}⟳ Auto-compacting context (${Math.round(contextTokens / 1000)}K used)...${RESET}`);
+            const kept = history.slice(-6);
+            history.length = 0;
+            history.push({ role: "system", content: `[Previous conversation compacted. ${msgCount} messages exchanged.]` });
+            history.push(...kept);
+            updateContext();
+            console.log(`${DIM}✓ Compacted to ${Math.round(contextTokens / 1000)}K${RESET}\n`);
         }
-        // Exit
-        if (trimmed === "exit" || trimmed === "quit" || trimmed === "/quit" || trimmed === "/exit") {
-            const duration = Math.round((Date.now() - sessionStart) / 1000);
-            console.log(`\n${DIM}Session: ${msgCount} messages, ${duration}s. Goodbye!${RESET}\n`);
-            rl.close();
-            return;
-        }
-        // Slash commands (Kiro-style)
-        if (trimmed.startsWith("/")) {
-            handleSlashCommand(trimmed, history, rl);
-            prompt();
-            return;
-        }
-        // Inline shell (!command) — runs directly without AI
-        if (trimmed.startsWith("!")) {
-            const cmd = trimmed.slice(1).trim();
-            if (!cmd) {
+        rl.question(`${BOLD}you>${RESET} `, async (input) => {
+            const trimmed = input.trim();
+            if (!trimmed) {
                 prompt();
                 return;
             }
-            console.log(`${DIM}$ ${cmd}${RESET}`);
+            // Exit
+            if (trimmed === "exit" || trimmed === "quit" || trimmed === "/quit" || trimmed === "/exit") {
+                const duration = Math.round((Date.now() - sessionStart) / 1000);
+                console.log(`\n${DIM}Session: ${msgCount} messages, ${duration}s. Goodbye!${RESET}\n`);
+                rl.close();
+                return;
+            }
+            // Slash commands (Kiro-style) — show preview if just "/"
+            if (trimmed === "/") {
+                showSlashPreview();
+                prompt();
+                return;
+            }
+            if (trimmed.startsWith("/")) {
+                handleSlashCommand(trimmed, history, rl);
+                prompt();
+                return;
+            }
+            // Inline shell (!command) — runs directly without AI
+            if (trimmed.startsWith("!")) {
+                const cmd = trimmed.slice(1).trim();
+                if (!cmd) {
+                    prompt();
+                    return;
+                }
+                console.log(`${DIM}$ ${cmd}${RESET}`);
+                try {
+                    const out = execSync(cmd, { timeout: 30000, maxBuffer: 1024 * 1024 }).toString();
+                    console.log(out);
+                }
+                catch (e) {
+                    console.log(e.stdout?.toString() || e.stderr?.toString() || e.message);
+                }
+                prompt();
+                return;
+            }
+            // AI chat
+            msgCount++;
+            console.log(`${DIM}thinking...${RESET}`);
             try {
-                const out = execSync(cmd, { timeout: 30000, maxBuffer: 1024 * 1024 }).toString();
-                console.log(out);
+                const resp = await chat(trimmed);
+                history.push({ role: "user", content: trimmed });
+                history.push({ role: "assistant", content: resp });
+                updateContext();
+                console.log(`\n${CYAN}hw>${RESET} ${resp}`);
+                console.log(`${DIM}  ${getContextBar()} • ${msgCount} msgs${RESET}\n`);
             }
             catch (e) {
-                console.log(e.stdout?.toString() || e.stderr?.toString() || e.message);
+                console.log(`\n${"\x1b[31m"}Error:${RESET} ${e.message}\n`);
             }
             prompt();
-            return;
-        }
-        // AI chat
-        msgCount++;
-        console.log(`${DIM}thinking...${RESET}`);
-        try {
-            const resp = await chat(trimmed);
-            history.push({ role: "user", content: trimmed });
-            history.push({ role: "assistant", content: resp });
-            console.log(`\n${CYAN}hw>${RESET} ${resp}\n`);
-        }
-        catch (e) {
-            console.log(`\n${"\x1b[31m"}Error:${RESET} ${e.message}\n`);
-        }
-        prompt();
-    });
+        });
+    };
     prompt();
+}
+function showSlashPreview() {
+    const BOLD = "\x1b[1m", DIM = "\x1b[2m", CYAN = "\x1b[36m", RESET = "\x1b[0m";
+    const BG = "\x1b[48;5;236m", FG = "\x1b[38;5;214m";
+    const cmds = [
+        ["/help", "Show all commands"],
+        ["/clear", "Clear conversation & start fresh"],
+        ["/context", "Show context usage & session info"],
+        ["/tools", "List all 95 available tools"],
+        ["/credits", "Check credit balance"],
+        ["/history", "Show conversation history"],
+        ["/save [path]", "Save session to file"],
+        ["/load [path]", "Load session from file"],
+        ["/compact", "Compress context to free space"],
+        ["/system", "Show machine/OS info"],
+        ["/trust", "Trust all actions (skip prompts)"],
+        ["/new", "Start new conversation"],
+        ["/model", "Show model info"],
+        ["/usage", "Session stats"],
+    ];
+    console.log(`\n${BG}${BOLD} COMMANDS ${RESET}`);
+    for (const [cmd, desc] of cmds) {
+        console.log(`${BG} ${FG}${cmd.padEnd(14)}${RESET}${BG} ${DIM}${desc}${RESET}`);
+    }
+    console.log("");
 }
 function handleSlashCommand(cmd, history, rl) {
     const BOLD = "\x1b[1m", DIM = "\x1b[2m", CYAN = "\x1b[36m", GREEN = "\x1b[32m", YELLOW = "\x1b[33m", RESET = "\x1b[0m";
@@ -410,16 +466,21 @@ ${BOLD}SHORTCUTS${RESET}
             _conversationId = null;
             console.log(`${GREEN}✓${RESET} Conversation cleared.\n`);
             break;
-        case "/context":
+        case "/context": {
+            const tk = history.reduce((s, m) => s + Math.ceil(m.content.length / 4), 0);
+            const pct = Math.min(100, Math.round((tk / 180000) * 100));
             console.log(`${BOLD}Context:${RESET}
   Working dir: ${process.cwd()}
   Conversation: ${_conversationId || "new"}
   Messages: ${history.length / 2} exchanges
-  Agent mode: enabled (32 local tools + 60 cloud tools)
+  Tokens: ~${(tk / 1000).toFixed(1)}K / 180K (${pct}%)
+  Agent mode: enabled (34 local + 61 cloud = 95 tools)
+  ${pct > 70 ? "⚠ High — will auto-compact at 70%" : "✓ Healthy"}
 `);
             break;
+        }
         case "/tools":
-            console.log(`${BOLD}LOCAL TOOLS (32):${RESET}
+            console.log(`${BOLD}LOCAL TOOLS (34):${RESET}
   ${DIM}Filesystem:${RESET} read_file, write_file, str_replace_file, append_file, list_directory, search_files, delete_path
   ${DIM}Shell:${RESET} run_command, install_package, get_system_info
   ${DIM}Git:${RESET} git_status, git_add, git_commit, git_push, git_pull, git_clone, git_log, git_diff, git_branch, check_github_auth
@@ -511,9 +572,14 @@ ${BOLD}CLOUD TOOLS (60):${RESET}
             console.log(`  Model: Claude (auto-selected by hostwares.com)\n  Routing: Haiku for simple, Sonnet for complex, Opus for business tier\n`);
             break;
         case "/usage":
-            console.log(`  Messages: ${history.length / 2}\n  Session: ${Math.round((Date.now() - Date.now()) / 1000)}s\n  ConversationID: ${_conversationId || "none"}\n`);
+            console.log(`  Messages: ${history.length / 2}\n  ConversationID: ${_conversationId || "none"}\n`);
+            break;
+        case "/new":
+            history.length = 0;
+            _conversationId = null;
+            console.log(`${GREEN}✓${RESET} New conversation started.\n`);
             break;
         default:
-            console.log(`${DIM}Unknown command: ${command}. Type /help for available commands.${RESET}\n`);
+            console.log(`${DIM}Unknown command: ${command}. Type / for available commands.${RESET}\n`);
     }
 }
