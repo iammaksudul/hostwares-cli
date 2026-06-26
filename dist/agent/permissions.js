@@ -28,15 +28,15 @@ async function askPermission(tool) {
     return false;
 }
 function prompt(msg) {
-    process.stdout.write(msg);
     return new Promise(resolve => {
+        process.stdout.write(msg);
         const stdin = process.stdin;
         const wasRaw = stdin.isRaw;
         if (stdin.isTTY)
             stdin.setRawMode(true);
         stdin.resume();
         stdin.once("data", (data) => {
-            const ch = data.toString().trim().toLowerCase();
+            const ch = data.toString()[0]?.toLowerCase() || "";
             if (stdin.isTTY)
                 stdin.setRawMode(wasRaw || false);
             stdin.pause();
