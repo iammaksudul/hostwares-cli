@@ -398,40 +398,57 @@ async function startChat() {
   const { execSync } = await import("child_process");
   const fs = await import("fs");
   const path = await import("path");
+  const { loadSession, saveSession, createSession } = await import("./session/manager.js");
+  const { calculateContext, shouldAutoCompact, compactHistory, formatContextBar } = await import("./session/context.js");
+  
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   
-  let sessionTrusted = false;
   const sessionStart = Date.now();
   let msgCount = 0;
-  const history: { role: string; content: string }[] = [];
-
-  // Context tracking (approximate tokens)
-  let contextTokens = 0;
-  const MAX_CONTEXT = 180000; // Claude's context window
-  const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+  const cwd = process.cwd();
   
-  const updateContext = () => {
-    contextTokens = history.reduce((sum, m) => sum + estimateTokens(m.content), 0);
-  };
+  // Directory-based session resume (like Kiro)
+  let session = loadSession(cwd);
+  const history: { role: string; content: string }[] = [];
+  
+  if (session && session.conversationId) {
+    _conversationId = session.conversationId;
+    history.push(...session.history.map(h => ({ role: h.role, content: h.content })));
+    msgCount = session.messageCount;
+    console.log(`${DIM}  ↻ Resumed session (${session.messageCount} msgs). /new for fresh start${RESET}\n`);
+  } else {
+    session = createSession(cwd);
+  }
+
+  const updateContext = () => calculateContext(history);
   
   const getContextBar = () => {
-    const pct = Math.min(100, Math.round((contextTokens / MAX_CONTEXT) * 100));
-    const used = (contextTokens / 1000).toFixed(1);
-    return `${DIM}${used}K (${pct}%)${RESET}`;
+    const ctx = calculateContext(history);
+    return `${DIM}${formatContextBar(ctx)}${RESET}`;
+  };
+
+  // Auto-save session periodically
+  const autoSave = () => {
+    session!.conversationId = _conversationId;
+    session!.history = history.map(h => ({ ...h, timestamp: new Date().toISOString() }));
+    session!.messageCount = msgCount;
+    session!.totalCreditsUsed = _lastCreditsUsed;
+    saveSession(session!);
   };
 
   console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}— your DevOps engineer. Type / for commands${RESET}\n`);
 
   const prompt = () => {
-    // Auto-compact if context exceeds 70%
-    if (contextTokens > MAX_CONTEXT * 0.7 && history.length > 10) {
-      console.log(`${DIM}⟳ Auto-compacting context (${Math.round(contextTokens/1000)}K used)...${RESET}`);
-      const kept = history.slice(-6);
+    // Auto-compact if context is critical (like Kiro's auto-compaction on overflow)
+    const ctx = calculateContext(history);
+    if (shouldAutoCompact(ctx) && history.length > 8) {
+      console.log(`${DIM}⟳ Auto-compacting context (${formatContextBar(ctx)})...${RESET}`);
+      const compacted = compactHistory(history, 4);
       history.length = 0;
-      history.push({ role: "system", content: `[Previous conversation compacted. ${msgCount} messages exchanged.]` });
-      history.push(...kept);
-      updateContext();
-      console.log(`${DIM}✓ Compacted to ${Math.round(contextTokens/1000)}K${RESET}\n`);
+      history.push(...compacted);
+      autoSave();
+      const newCtx = calculateContext(history);
+      console.log(`${DIM}✓ Compacted → ${formatContextBar(newCtx)}${RESET}\n`);
     }
     
     rl.question(`${BOLD}you>${RESET} `, async (input: string) => {
@@ -486,7 +503,8 @@ async function startChat() {
       }
       history.push({ role: "user", content: trimmed });
       history.push({ role: "assistant", content: resp });
-      updateContext();
+      msgCount++;
+      autoSave(); // Persist session
       const elapsed = ((Date.now() - msgStart) / 1000).toFixed(0);
       if (!streamed) console.log(`\n${CYAN}hw>${RESET} ${resp}`);
       console.log(`${DIM}  ▸ Credits: ${_lastBalance.toFixed(2)} • Time: ${elapsed}s • ${getContextBar()}${RESET}\n`);
