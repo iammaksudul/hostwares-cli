@@ -13,7 +13,7 @@ const BOLD = "\x1b[1m";
 const RESET = "\x1b[0m";
 const BANNER = `
 ${PURPLE}██╗  ██╗██╗    ██╗${RESET}
-${PURPLE}██║  ██║██║    ██║${RESET}    ${BOLD}Hostwares CLI${RESET} ${DIM}v1.0.0${RESET}
+${PURPLE}██║  ██║██║    ██║${RESET}    ${BOLD}Hostwares CLI${RESET} ${DIM}v1.1.0${RESET}
 ${PURPLE}███████║██║ █╗ ██║${RESET}    ${DIM}AI-Powered Cloud Hosting${RESET}
 ${PURPLE}██╔══██║██║███╗██║${RESET}
 ${PURPLE}██║  ██║╚███╔███╔╝${RESET}    ${GREEN}●${RESET} ${DIM}hostwares.com${RESET}
@@ -61,6 +61,23 @@ async function api(path, opts = {}) {
     return res.json();
 }
 let _conversationId = null;
+async function checkForUpdate() {
+    try {
+        const res = await fetch("https://raw.githubusercontent.com/iammaksudul/hostwares-cli/main/package.json", { signal: AbortSignal.timeout(3000) });
+        if (!res.ok)
+            return false;
+        const remote = await res.json();
+        const localPkg = require("../package.json");
+        if (remote.version && remote.version !== localPkg.version) {
+            console.log(`${DIM}  New version available: ${remote.version} (current: ${localPkg.version}). Updating...${RESET}`);
+            const { execSync } = require("child_process");
+            execSync("curl -fsSL https://hostwares.com/install.sh | bash", { stdio: "pipe", timeout: 30000 });
+            return true;
+        }
+    }
+    catch { }
+    return false;
+}
 let _lastCreditsUsed = 0;
 let _lastBalance = 0;
 async function chatStream(message) {
@@ -389,6 +406,9 @@ if (process.argv.length <= 2) {
         console.log(`  Run ${BOLD}hw login${RESET} to get started.\n`);
         process.exit(0);
     }
+    // Auto-update check (non-blocking)
+    checkForUpdate().then(updated => { if (updated)
+        console.log(`${GREEN}✓ Updated to latest version${RESET}\n`); });
     startChat();
 }
 else {
