@@ -491,7 +491,18 @@ async function startChat() {
       if (!streamed) console.log(`\n${CYAN}hw>${RESET} ${resp}`);
       console.log(`${DIM}  ▸ Credits: ${_lastBalance.toFixed(2)} • Time: ${elapsed}s • ${getContextBar()}${RESET}\n`);
     } catch (e: any) {
-      console.log(`\n${"\x1b[31m"}Error:${RESET} ${e.message}\n`);
+      if (e.message?.includes("401") || e.message?.includes("Unauthorized")) {
+        console.log(`\n${"\x1b[33m"}Session expired.${RESET} Re-authenticating...\n`);
+        const { execSync } = require("child_process");
+        try {
+          execSync("hw login", { stdio: "inherit" });
+          console.log(`\n${GREEN}✓ Re-authenticated. Try your command again.${RESET}\n`);
+        } catch {
+          console.log(`${"\x1b[31m"}Login failed.${RESET} Run: hw login\n`);
+        }
+      } else {
+        console.log(`\n${"\x1b[31m"}Error:${RESET} ${e.message}\n`);
+      }
     }
     prompt();
   });
