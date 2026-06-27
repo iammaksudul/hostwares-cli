@@ -110,7 +110,9 @@ async function chatStream(message: string): Promise<string> {
     const lines = buffer.split("\n");
     buffer = lines.pop() || "";
     
+    let currentEvent = "";
     for (const line of lines) {
+      if (line.startsWith("event: ")) { currentEvent = line.slice(7).trim(); continue; }
       if (!line.startsWith("data: ")) continue;
       const data = line.slice(6);
       if (data === "[DONE]") continue;
@@ -118,23 +120,20 @@ async function chatStream(message: string): Promise<string> {
       try {
         const parsed = JSON.parse(data);
         
-        if (parsed.type === "text" || parsed.type === "content_block_delta") {
-          const text = parsed.text || parsed.delta?.text || "";
+        if (currentEvent === "text" || parsed.content) {
+          const text = parsed.content || parsed.text || parsed.delta?.text || "";
           if (text) {
             if (firstChunk) { process.stdout.write(`\n${CYAN}hw>${RESET} `); firstChunk = false; }
             process.stdout.write(text);
             fullText += text;
           }
-        } else if (parsed.type === "message_stop" || parsed.type === "done") {
+        } else if (currentEvent === "done" || parsed.conversationId) {
           if (parsed.conversationId) _conversationId = parsed.conversationId;
-          if (parsed.creditsUsed) _lastCreditsUsed += parsed.creditsUsed;
-          if (parsed.balance !== undefined) _lastBalance = parsed.balance;
-        } else if (parsed.conversationId) {
-          _conversationId = parsed.conversationId;
           if (parsed.creditsUsed) _lastCreditsUsed += parsed.creditsUsed;
           if (parsed.balance !== undefined) _lastBalance = parsed.balance;
         }
       } catch {}
+      currentEvent = "";
     }
   }
   
