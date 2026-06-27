@@ -8,8 +8,16 @@ const RESET = "\x1b[0m";
 
 export function resetTrust() { trustMode = false; }
 
+// Read-only tools that are always safe — never ask permission
+const READ_ONLY_TOOLS = new Set([
+  "read_file", "list_directory", "search_files", "get_system_info",
+  "git_status", "git_log", "git_diff", "check_github_auth",
+  "docker_ps", "list_processes", "check_port", "web_search", "web_fetch",
+]);
+
 export async function askPermission(tool: { name: string; input: any; destructive: boolean }): Promise<boolean> {
   if (trustMode) return true;
+  if (READ_ONLY_TOOLS.has(tool.name)) return true; // Auto-allow safe reads
 
   const desc = describeAction(tool.name, tool.input);
   console.log(`\n${YELLOW}hw>${RESET} I need to: ${BOLD}${desc}${RESET}`);

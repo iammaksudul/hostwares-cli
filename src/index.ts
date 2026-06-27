@@ -61,6 +61,71 @@ let _conversationId: string | null = null;
 let _lastCreditsUsed = 0;
 let _lastBalance = 0;
 
+async function chatStream(message: string): Promise<string> {
+  const config = getConfig();
+  const body: any = { message, agentMode: true };
+  if (_conversationId) body.conversationId = _conversationId;
+  
+  const res = await fetch(`${config.baseUrl || "https://hostwares.com"}/api/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
+    body: JSON.stringify(body),
+  });
+  
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.message || e.error || `HTTP ${res.status}`);
+  }
+
+  // Parse SSE stream
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No stream");
+  
+  const decoder = new TextDecoder();
+  let fullText = "";
+  let buffer = "";
+  let firstChunk = true;
+  
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6);
+      if (data === "[DONE]") continue;
+      
+      try {
+        const parsed = JSON.parse(data);
+        
+        if (parsed.type === "text" || parsed.type === "content_block_delta") {
+          const text = parsed.text || parsed.delta?.text || "";
+          if (text) {
+            if (firstChunk) { process.stdout.write(`\n${CYAN}hw>${RESET} `); firstChunk = false; }
+            process.stdout.write(text);
+            fullText += text;
+          }
+        } else if (parsed.type === "message_stop" || parsed.type === "done") {
+          if (parsed.conversationId) _conversationId = parsed.conversationId;
+          if (parsed.creditsUsed) _lastCreditsUsed += parsed.creditsUsed;
+          if (parsed.balance !== undefined) _lastBalance = parsed.balance;
+        } else if (parsed.conversationId) {
+          _conversationId = parsed.conversationId;
+          if (parsed.creditsUsed) _lastCreditsUsed += parsed.creditsUsed;
+          if (parsed.balance !== undefined) _lastBalance = parsed.balance;
+        }
+      } catch {}
+    }
+  }
+  
+  if (!firstChunk) process.stdout.write("\n");
+  return fullText;
+}
+
 async function chat(message: string): Promise<string> {
   const body: any = { message, agentMode: true };
   if (_conversationId) body.conversationId = _conversationId;
@@ -391,12 +456,21 @@ async function startChat() {
     const msgStart = Date.now();
     console.log(`${DIM}thinking...${RESET}`);
     try {
-      const resp = await chat(trimmed);
+      // Try streaming first, fall back to non-streaming (for agent tool calls)
+      let resp: string;
+      let streamed = false;
+      try {
+        resp = await chatStream(trimmed);
+        streamed = true;
+      } catch {
+        // Streaming failed (might be agent mode with tool calls) — use regular
+        resp = await chat(trimmed);
+      }
       history.push({ role: "user", content: trimmed });
       history.push({ role: "assistant", content: resp });
       updateContext();
       const elapsed = ((Date.now() - msgStart) / 1000).toFixed(0);
-      console.log(`\n${CYAN}hw>${RESET} ${resp}`);
+      if (!streamed) console.log(`\n${CYAN}hw>${RESET} ${resp}`);
       console.log(`${DIM}  ▸ Credits: ${_lastBalance.toFixed(2)} • Time: ${elapsed}s • ${getContextBar()}${RESET}\n`);
     } catch (e: any) {
       console.log(`\n${"\x1b[31m"}Error:${RESET} ${e.message}\n`);
