@@ -58,11 +58,16 @@ async function api(path: string, opts: RequestInit = {}): Promise<any> {
 
 let _conversationId: string | null = null;
 
+let _lastCreditsUsed = 0;
+let _lastBalance = 0;
+
 async function chat(message: string): Promise<string> {
   const body: any = { message, agentMode: true };
   if (_conversationId) body.conversationId = _conversationId;
   const data = await apiRaw("/api/chat", { method: "POST", body: JSON.stringify(body) });
   if (data.conversationId) _conversationId = data.conversationId;
+  if (data.creditsUsed) _lastCreditsUsed += data.creditsUsed;
+  if (data.balance !== undefined) _lastBalance = data.balance;
 
   // Agent mode: handle local tool calls
   if (data.localToolCalls?.length > 0) {
@@ -74,6 +79,8 @@ async function chat(message: string): Promise<string> {
         if (_conversationId) b.conversationId = _conversationId;
         const d = await apiRaw("/api/chat", { method: "POST", body: JSON.stringify(b) });
         if (d.conversationId) _conversationId = d.conversationId;
+        if (d.creditsUsed) _lastCreditsUsed += d.creditsUsed;
+        if (d.balance !== undefined) _lastBalance = d.balance;
         return d;
       },
     }, _conversationId || undefined);
@@ -351,7 +358,7 @@ async function startChat() {
     // Exit
     if (trimmed === "exit" || trimmed === "quit" || trimmed === "/quit" || trimmed === "/exit") {
       const duration = Math.round((Date.now() - sessionStart) / 1000);
-      console.log(`\n${DIM}Session: ${msgCount} messages, ${duration}s. Goodbye!${RESET}\n`);
+      console.log(`\n${DIM}Session: ${msgCount} messages, ${duration}s. Credits used: ${_lastCreditsUsed.toFixed(2)}. Goodbye!${RESET}\n`);
       rl.close(); return;
     }
 
@@ -381,14 +388,16 @@ async function startChat() {
 
     // AI chat
     msgCount++;
+    const msgStart = Date.now();
     console.log(`${DIM}thinking...${RESET}`);
     try {
       const resp = await chat(trimmed);
       history.push({ role: "user", content: trimmed });
       history.push({ role: "assistant", content: resp });
       updateContext();
+      const elapsed = ((Date.now() - msgStart) / 1000).toFixed(0);
       console.log(`\n${CYAN}hw>${RESET} ${resp}`);
-      console.log(`${DIM}  ${getContextBar()} • ${msgCount} msgs${RESET}\n`);
+      console.log(`${DIM}  ▸ Credits: ${_lastBalance.toFixed(2)} • Time: ${elapsed}s • ${getContextBar()}${RESET}\n`);
     } catch (e: any) {
       console.log(`\n${"\x1b[31m"}Error:${RESET} ${e.message}\n`);
     }
