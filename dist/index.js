@@ -428,10 +428,18 @@ async function startChat() {
     let session = loadSession(cwd);
     const history = [];
     if (session && session.conversationId) {
-        _conversationId = session.conversationId;
-        history.push(...session.history.map(h => ({ role: h.role, content: h.content })));
-        msgCount = session.messageCount;
-        console.log(`${DIM}  ↻ Resumed session (${session.messageCount} msgs). /new for fresh start${RESET}\n`);
+        // Check if old session has toxic "I can't" responses — start fresh if so
+        const hasBadHistory = session.history.some(h => h.role === "assistant" && (h.content.includes("can't access your local") || h.content.includes("outside my scope") || h.content.includes("out of scope")));
+        if (hasBadHistory) {
+            session = createSession(cwd);
+            console.log(`${DIM}  ↻ Fresh session (cleared stale context)${RESET}\n`);
+        }
+        else {
+            _conversationId = session.conversationId;
+            history.push(...session.history.map(h => ({ role: h.role, content: h.content })));
+            msgCount = session.messageCount;
+            console.log(`${DIM}  ↻ Resumed session (${session.messageCount} msgs). /new for fresh start${RESET}\n`);
+        }
     }
     else {
         session = createSession(cwd);
