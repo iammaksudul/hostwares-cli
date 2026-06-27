@@ -522,6 +522,27 @@ async function startChat() {
         } catch {
           console.log(`${"\x1b[31m"}Login failed.${RESET} Run: hw login\n`);
         }
+      } else if (e.message?.includes("ai_terms_required")) {
+        console.log(`\n${"\x1b[33m"}━━━ AI DevOps Agent Terms ━━━${RESET}`);
+        console.log(`\nThe AI Agent can execute commands on your machine and servers.`);
+        console.log(`Actions are at your own risk. Hostwares is not liable for any`);
+        console.log(`data loss, misconfiguration, or damage caused by AI operations.`);
+        console.log(`\nFull terms: https://hostwares.com/terms#ai-agent\n`);
+        const readline = require("readline");
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        rl.question(`${BOLD}Accept? [y/n]:${RESET} `, async (answer: string) => {
+          rl.close();
+          if (answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes") {
+            try {
+              await apiRaw("/api/ai-terms", { method: "POST" });
+              console.log(`\n${GREEN}✓ Terms accepted. Try your command again.${RESET}\n`);
+            } catch { console.log(`${"\x1b[31m"}Failed to accept terms.${RESET}\n`); }
+          } else {
+            console.log(`${DIM}Terms not accepted. AI Agent unavailable.${RESET}\n`);
+          }
+          prompt();
+        });
+        return;
       } else {
         console.log(`\n${"\x1b[31m"}Error:${RESET} ${e.message}\n`);
       }
