@@ -335,7 +335,7 @@ async function startChat() {
         const used = (contextTokens / 1000).toFixed(1);
         return `${DIM}${used}K (${pct}%)${RESET}`;
     };
-    console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}— PhD-level DevOps engineer. Type / for commands${RESET}\n`);
+    console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}— your DevOps engineer. Type / for commands${RESET}\n`);
     const prompt = () => {
         // Auto-compact if context exceeds 70%
         if (contextTokens > MAX_CONTEXT * 0.7 && history.length > 10) {

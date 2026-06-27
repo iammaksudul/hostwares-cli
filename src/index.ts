@@ -330,7 +330,7 @@ async function startChat() {
     return `${DIM}${used}K (${pct}%)${RESET}`;
   };
 
-  console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}— PhD-level DevOps engineer. Type / for commands${RESET}\n`);
+  console.log(`${PURPLE}Hostwares AI${RESET} ${DIM}— your DevOps engineer. Type / for commands${RESET}\n`);
 
   const prompt = () => {
     // Auto-compact if context exceeds 70%
