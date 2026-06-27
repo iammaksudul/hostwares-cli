@@ -11,13 +11,13 @@ export type AgentConfig = {
   apiCall: (message: string | null, opts: { agentMode: boolean; conversationId?: string; toolResults?: any[]; assistantContent?: any }) => Promise<any>;
 };
 
-export async function agentLoop(message: string, config: AgentConfig, conversationId?: string): Promise<{ text: string; conversationId: string }> {
+export async function agentLoop(message: string, config: AgentConfig, conversationId?: string, initialResponse?: any): Promise<{ text: string; conversationId: string }> {
   let currentConvoId = conversationId;
   let iterations = 0;
   const MAX_ITERATIONS = 10;
 
-  // Initial request
-  let response = await config.apiCall(message, { agentMode: true, conversationId: currentConvoId });
+  // Use initial response if provided (avoid duplicate API call)
+  let response = initialResponse || await config.apiCall(message, { agentMode: true, conversationId: currentConvoId });
   currentConvoId = response.conversationId || currentConvoId;
 
   while (response.localToolCalls?.length > 0 && iterations < MAX_ITERATIONS) {

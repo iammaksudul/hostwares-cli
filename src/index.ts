@@ -163,7 +163,7 @@ async function chat(message: string): Promise<string> {
         if (d.balance !== undefined) _lastBalance = d.balance;
         return d;
       },
-    }, _conversationId || undefined);
+    }, _conversationId || undefined, data);
     _conversationId = result.conversationId;
     return result.text;
   }

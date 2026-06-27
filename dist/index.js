@@ -180,7 +180,7 @@ async function chat(message) {
                     _lastBalance = d.balance;
                 return d;
             },
-        }, _conversationId || undefined);
+        }, _conversationId || undefined, data);
         _conversationId = result.conversationId;
         return result.text;
     }

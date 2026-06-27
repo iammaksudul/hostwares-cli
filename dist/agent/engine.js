@@ -10,12 +10,12 @@ const DIM = "\x1b[2m";
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
 const RESET = "\x1b[0m";
-async function agentLoop(message, config, conversationId) {
+async function agentLoop(message, config, conversationId, initialResponse) {
     let currentConvoId = conversationId;
     let iterations = 0;
     const MAX_ITERATIONS = 10;
-    // Initial request
-    let response = await config.apiCall(message, { agentMode: true, conversationId: currentConvoId });
+    // Use initial response if provided (avoid duplicate API call)
+    let response = initialResponse || await config.apiCall(message, { agentMode: true, conversationId: currentConvoId });
     currentConvoId = response.conversationId || currentConvoId;
     while (response.localToolCalls?.length > 0 && iterations < MAX_ITERATIONS) {
         iterations++;
