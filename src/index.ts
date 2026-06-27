@@ -490,16 +490,12 @@ async function startChat() {
     const msgStart = Date.now();
     console.log(`${DIM}thinking...${RESET}`);
     try {
-      // Try streaming first, fall back to non-streaming (for agent tool calls)
+      // Use agent-mode chat (has local tools). Stream is for display only after.
       let resp: string;
       let streamed = false;
-      try {
-        resp = await chatStream(trimmed);
-        streamed = true;
-      } catch {
-        // Streaming failed (might be agent mode with tool calls) — use regular
-        resp = await chat(trimmed);
-      }
+      resp = await chat(trimmed);
+      // If response came from agent (non-streamed), display it
+      if (resp) streamed = false;
       history.push({ role: "user", content: trimmed });
       history.push({ role: "assistant", content: resp });
       msgCount++;
